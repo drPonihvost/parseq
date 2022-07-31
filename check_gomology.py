@@ -1,15 +1,26 @@
-import requests
+#!/usr/bin/python3
+import sys
+import os
+
+try:
+    import requests
+except ImportError:
+    print('Отсутствует библиотека requests, для установки необходимо выполнить команду: pip install requests')
+    input()
 
 from design_loader import Loader, Design, Region
 
 
 class DesignGomology(Design):
-    def set_match(self):
+    def set_match(self, overlap):
         for region in self.regions:
-            region.set_gomology(self.track.db)
+            print(f"Поиск совпадений {self.regions.index(region) + 1} из {len(self.regions)} >= {overlap}%")
+            region.set_gomology(self.track.db, overlap)
+            print(f"Готово {self.regions.index(region) + 1} из {len(self.regions)}")
 
-    def create_txt(self):
-        with open(f"{self.track.name}_gomology.txt", 'w') as file:
+    def create_txt(self, output_path):
+        with open(output_path, 'w') as file:
+            print('Создается файл')
             file.write('chrom\tstart\tend\tg_chrom\tg_start\tg_end\n')
             for reg in self.regions:
                 if reg.gomology:
@@ -18,6 +29,7 @@ class DesignGomology(Design):
                             f"{reg.chrom}\t{reg.chrom_start}\t{reg.chrom_end}\t"
                             f"{g['chrom']}\t{g['tStart']}\t{g['tEnd']}\n"
                         )
+        print('Готово')
 
 
 class RegionGomology(Region):
@@ -28,31 +40,33 @@ class RegionGomology(Region):
     def get_coord(self):
         return f"{self.chrom}:{self.chrom_start}-{self.chrom_end}"
 
-    def set_gomology(self, genome):
+    def set_gomology(self, genome, overlap):
         sequence = self.__get_sequence(genome)['dna']
         blat_data = self.__get_BLAT_data(genome, sequence)
-        self.gomology = self.__match_filter(blat_data)
+        self.gomology = self.__match_filter(blat_data, overlap)
 
     def __get_sequence(self, genome):
+        print(f"Получение последовательности для записи {self.get_coord()}")
         return requests.get(
             f"https://api.genome.ucsc.edu/getData/sequence?genome={genome};chrom={self.chrom};start={self.chrom_start};end={self.chrom_end}"
         ).json()
 
-    @staticmethod
-    def __get_BLAT_data(genome, sequence):
+    def __get_BLAT_data(self, genome, sequence):
+        print(f"Получение данных о совпадении для записи {self.get_coord()}")
         return requests.get(
             f"https://genome.ucsc.edu/cgi-bin/hgBlat?userSeq={sequence}&type=DNA&db={genome}&output=json"
         ).json()
 
-    def __match_filter(self, blat_data):
+    def __match_filter(self, blat_data, overlap):
         match_list = []
         matches = blat_data['fields'].index('matches')
         chrom = blat_data['fields'].index('tName')
         tStart = blat_data['fields'].index('tStart')
         tEnd = blat_data['fields'].index('tEnd')
         for match in blat_data['blat']:
-            if match[matches] == int(self.chrom_end) - int(self.chrom_start):
+            if int(match[matches])*100/(int(self.chrom_end) - int(self.chrom_start)) >= int(overlap):
                 if int(match[tStart]) != int(self.chrom_start) and int(match[tEnd]) != int(self.chrom_end):
+                    print(f"Найдено совпадение последовательности превышающее {overlap}")
                     match_list.append(
                         {
                             'chrom': match[chrom],
@@ -63,90 +77,12 @@ class RegionGomology(Region):
         return match_list
 
 
+if __name__ == '__main__':
+    input_path = os.path.abspath(sys.argv[1])
+    output_path = os.path.abspath(sys.argv[2])
+    overlap = sys.argv[3]
 
-
-    # {
-    #     "track": "blat",
-    #     "genome": "hg38",
-    #     "fields": [
-    #         "matches",
-    #         "misMatches",
-    #         "repMatches",
-    #         "nCount",
-    #         "qNumInsert",
-    #         "qBaseInsert",
-    #         "tNumInsert",
-    #         "tBaseInsert",
-    #         "strand",
-    #         "qName",
-    #         "qSize",
-    #         "qStart",
-    #         "qEnd",
-    #         "tName",
-    #         "tSize",
-    #         "tStart",
-    #         "tEnd",
-    #         "blockCount",
-    #         "blockSizes",
-    #         "qStarts",
-    #         "tStarts"
-    #     ],
-    #     "blat": [
-    #         [
-    #             20,
-    #             0,
-    #             0,
-    #             0,
-    #             0,
-    #             0,
-    #             0,
-    #             0,
-    #             "+",
-    #             "YourSeq",
-    #             20,
-    #             0,
-    #             20,
-    #             "chr21",
-    #             46709983,
-    #             31659745,
-    #             31659765,
-    #             1,
-    #             "20",
-    #             "0",
-    #             "31659745"
-    #         ]
-    #     ]
-    # }
-
-
-    # строгое вхождение интервала в экзон
-    # def __set_exon_number(self, request):
-    #     result = []
-    #     for item in request['ncbiRefSeq']:
-    #         exons = zip(item['exonStarts'].split(','), item['exonEnds'].split(','))
-    #         n = 1
-    #         for exon in exons:
-    #             if self.chrom_start > exon[0] and self.chrom_end < exon[1]:
-    #                 result.append(str(n))
-    #             n += 1
-    #     if result:
-    #         self.exon_number = list(set(result))
-
-    # включает любые вхождения интервала в экзон
-    # def __set_exon_number(self, request):
-    #     result = set()
-    #     for item in request['ncbiRefSeq']:
-    #         exons = zip(item['exonStarts'].split(','), item['exonEnds'].split(','))
-    #         n = 0
-    #         for exon in exons:
-    #             n += 1
-    #             if self.chrom_end < exon[0] or self.chrom_start > exon[1]:
-    #                 continue
-    #             result.update(str(n))
-    #     if result:
-    #         self.exon_number = list(result)
-
-track, data = Loader.load_design(r'C:\Users\kudro\Desktop\ТЗ\parseq\IAD143293_241_Designed_short.bed')
-d = DesignGomology(data, track, region_class=RegionGomology)
-d.set_match()
-d.create_txt()
+    track, data = Loader.load_design(input_path)
+    d = DesignGomology(data, track, region_class=RegionGomology)
+    d.set_match(overlap)
+    d.create_txt(output_path)

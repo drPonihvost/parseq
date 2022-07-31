@@ -1,4 +1,12 @@
-import requests
+#!/usr/bin/python3
+import sys
+import os
+
+try:
+    import requests
+except ImportError:
+    print('Отсутствует библиотека requests, для установки необходимо выполнить команду: pip install requests')
+    input()
 
 from design_loader import Loader, Design, Region
 
@@ -6,7 +14,10 @@ from design_loader import Loader, Design, Region
 class DesignAnnotation(Design):
     def get_annotations(self):
         for region in self.regions:
+            print(f"Аннотирование записи {self.regions.index(region) + 1} из {len(self.regions)}")
             region.get_annotation_data(self.track.db)
+            print(f"Готово {self.regions.index(region) + 1} из {len(self.regions)}")
+        print('Аннотирование окончено')
 
     def get_gene_name(self):
         with open('gene_list.txt', 'w') as file:
@@ -17,8 +28,9 @@ class DesignAnnotation(Design):
             for reg in regions:
                 file.write(reg + '\n')
 
-    def create_txt(self):
-        with open(f"{self.track.name}_annotated.txt", 'w') as file:
+    def create_txt(self, output_path):
+        print('Создается файл')
+        with open(output_path, 'w') as file:
             file.write(self.track.track_string + '\n')
             for reg in self.regions:
                 file.write(
@@ -28,6 +40,7 @@ class DesignAnnotation(Design):
                     f"{','.join(reg.name2) if reg.name2 else None}\t"
                     f"{','.join(reg.exon_number) if reg.exon_number else None}\n"
                 )
+        print('Готово')
 
 
 class RegionAnnotation(Region):
@@ -43,11 +56,15 @@ class RegionAnnotation(Region):
     def get_annotation_data(self, genome):
         request = self.__get_annotation(genome)
         if request['ncbiRefSeq']:
+            print('Запись данных')
             self.__set_name(request)
             self.__set_name2(request)
             self.__set_exon_number(request)
+        else:
+            print('Аннотация отсутствует')
 
     def __get_annotation(self, genome):
+        print(f"Получение аннотации для записи {self.get_coord()}")
         return requests.get(
             f"https://api.genome.ucsc.edu/getData/track?genome={genome};track=ncbiRefSeq;chrom={self.chrom};start={self.chrom_start};end={self.chrom_end}").json()
 
@@ -85,8 +102,11 @@ class RegionAnnotation(Region):
             self.exon_number = result
 
 
-track, data = Loader.load_design(r'C:\Users\kudro\Desktop\ТЗ\parseq\IAD143293_241_Designed_short.bed')
-d = DesignAnnotation(data, track, region_class=RegionAnnotation)
-d.get_annotations()
-d.create_txt()
-d.get_gene_name()
+if __name__ == '__main__':
+    input_path = os.path.abspath(sys.argv[1])
+    output_path = os.path.abspath(sys.argv[2])
+
+    track, data = Loader.load_design(input_path)
+    d = DesignAnnotation(data, track, region_class=RegionAnnotation)
+    d.get_annotations()
+    d.create_txt(output_path)
