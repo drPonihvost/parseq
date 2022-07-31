@@ -13,20 +13,15 @@ from design_loader import Loader, Design, Region
 
 class DesignAnnotation(Design):
     def get_annotations(self):
-        for region in self.regions:
-            print(f"Аннотирование записи {self.regions.index(region) + 1} из {len(self.regions)}")
+        for number, region in enumerate(self.regions, start=1):
+            print(f"Аннотирование записи {number} из {len(self.regions)}")
             region.get_annotation_data(self.track.db)
-            print(f"Готово {self.regions.index(region) + 1} из {len(self.regions)}")
+            print(f"Готово {number} из {len(self.regions)}")
         print('Аннотирование окончено')
 
     def get_gene_name(self):
         with open('gene_list.txt', 'w') as file:
-            regions = set()
-            for reg in self.regions:
-                if reg.name2:
-                    regions.update(reg.name2)
-            for reg in regions:
-                file.write(reg + '\n')
+            [file.write(gene + '\n') for gene in {reg.name2 for reg in self.regions if reg.name2}]
 
     def create_txt(self, output_path):
         print('Создается файл')
@@ -35,7 +30,7 @@ class DesignAnnotation(Design):
             for reg in self.regions:
                 file.write(
                     f"{reg.chrom}\t{reg.chrom_start}\t{reg.chrom_end}\t"
-                    f"{reg.strand}\t{reg.other}\t"
+                    f"{','.join(reg.other)}\t"
                     f"{','.join(reg.name) if reg.name else None}\t"
                     f"{','.join(reg.name2) if reg.name2 else None}\t"
                     f"{','.join(reg.exon_number) if reg.exon_number else None}\n"
@@ -49,9 +44,6 @@ class RegionAnnotation(Region):
         self.name = None
         self.name2 = None
         self.exon_number = None
-
-    def get_coord(self):
-        return f"{self.chrom}:{self.chrom_start}-{self.chrom_end}"
 
     def get_annotation_data(self, genome):
         request = self.__get_annotation(genome)
@@ -72,7 +64,7 @@ class RegionAnnotation(Region):
         self.name = [item['name'] for item in request['ncbiRefSeq']]
 
     def __set_name2(self, request):
-        self.name2 = list(set([item['name2'] for item in request['ncbiRefSeq']]))
+        self.name2 = list({item['name2'] for item in request['ncbiRefSeq']})
 
     # строгое вхождение интервала в экзон
     # def __set_exon_number(self, request):
@@ -92,12 +84,10 @@ class RegionAnnotation(Region):
         result = []
         for item in request['ncbiRefSeq']:
             exons = zip(item['exonStarts'].split(','), item['exonEnds'].split(','))
-            n = 0
-            for exon in exons:
-                n += 1
+            for number, exon in enumerate(exons, start=1):
                 if self.chrom_end < exon[0] or self.chrom_start > exon[1]:
                     continue
-                result.append(str(n))
+                result.append(str(number))
         if result:
             self.exon_number = result
 

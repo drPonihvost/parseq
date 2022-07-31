@@ -25,9 +25,10 @@ class Region:
         self.chrom = data[0]
         self.chrom_start = data[1]
         self.chrom_end = data[2]
-        self.ampl_name = data[3]
-        self.strand = data[4]
-        self.other = data[5]
+        self.other = data[3:]
+
+    def get_coord(self):
+        return f"{self.chrom}:{self.chrom_start}-{self.chrom_end}"
 
 
 class Design:

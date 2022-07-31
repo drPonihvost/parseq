@@ -13,10 +13,10 @@ from design_loader import Loader, Design, Region
 
 class DesignGomology(Design):
     def set_match(self, overlap):
-        for region in self.regions:
-            print(f"Поиск совпадений {self.regions.index(region) + 1} из {len(self.regions)} >= {overlap}%")
+        for number, region in enumerate(self.regions):
+            print(f"Поиск совпадений {number} из {len(self.regions)} >= {overlap}%")
             region.set_gomology(self.track.db, overlap)
-            print(f"Готово {self.regions.index(region) + 1} из {len(self.regions)}")
+            print(f"Готово {number} из {len(self.regions)}")
 
     def create_txt(self, output_path):
         with open(output_path, 'w') as file:
@@ -37,11 +37,8 @@ class RegionGomology(Region):
         super().__init__(data)
         self.gomology = None
 
-    def get_coord(self):
-        return f"{self.chrom}:{self.chrom_start}-{self.chrom_end}"
-
     def set_gomology(self, genome, overlap):
-        sequence = self.__get_sequence(genome)['dna']
+        sequence = self.__get_sequence(genome)
         blat_data = self.__get_BLAT_data(genome, sequence)
         self.gomology = self.__match_filter(blat_data, overlap)
 
@@ -49,7 +46,7 @@ class RegionGomology(Region):
         print(f"Получение последовательности для записи {self.get_coord()}")
         return requests.get(
             f"https://api.genome.ucsc.edu/getData/sequence?genome={genome};chrom={self.chrom};start={self.chrom_start};end={self.chrom_end}"
-        ).json()
+        ).json()['dna']
 
     def __get_BLAT_data(self, genome, sequence):
         print(f"Получение данных о совпадении для записи {self.get_coord()}")
